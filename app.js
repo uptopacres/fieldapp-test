@@ -60,6 +60,10 @@ const SECTIONS = [
   { key: 'incident', label: 'Incident / Interaction' },
 ];
 
+// Harvest repeater: new rows start at 20, +/- moves by 5; the number can also be typed.
+const HARVEST_START = 20;
+const HARVEST_STEP = 5;
+
 const QUICK_REASONS = ['Not needed today', 'No access', 'Ran out of time', 'Weather'];
 
 /* ===================== DATA SERVICE =====================
@@ -506,9 +510,9 @@ function harvestHTML(sec) {
     <div class="hrow">
       <span class="hrow-name">${esc(r.crop)}</span>
       <div class="stepper">
-        <button data-action="step" data-idx="${i}" data-d="-1" aria-label="Less ${esc(r.crop)}">−</button>
-        <span class="qty" data-qty="${i}">${r.qty}</span>
-        <button data-action="step" data-idx="${i}" data-d="1" aria-label="More ${esc(r.crop)}">+</button>
+        <button data-action="step" data-idx="${i}" data-d="-${HARVEST_STEP}" aria-label="Less ${esc(r.crop)}">−</button>
+        <input class="qty" type="number" inputmode="numeric" min="0" step="${HARVEST_STEP}" id="qty-${i}" data-qty="${i}" data-bind="harvestQty" data-idx="${i}" value="${r.qty}" aria-label="${esc(r.crop)} quantity">
+        <button data-action="step" data-idx="${i}" data-d="${HARVEST_STEP}" aria-label="More ${esc(r.crop)}">+</button>
       </div>
       <button class="x" data-action="harvest-del" data-idx="${i}" aria-label="Remove ${esc(r.crop)}">×</button>
     </div>`).join('');
@@ -883,13 +887,13 @@ document.addEventListener('click', (e) => {
     case 'step': {
       const row = sec.rows[+t.dataset.idx];
       row.qty = Math.max(0, row.qty + Number(t.dataset.d));
-      $(`#sec-${key} [data-qty="${t.dataset.idx}"]`).textContent = row.qty;
+      $(`#sec-${key} [data-qty="${t.dataset.idx}"]`).value = row.qty;
       touch(st); refreshDerived(site);
       break;
     }
     case 'harvest-open': ui.harvestPicker = true; rerenderSection(site, key); break;
     case 'harvest-add':
-      sec.rows.push({ crop: t.dataset.val, qty: 1 });
+      sec.rows.push({ crop: t.dataset.val, qty: HARVEST_START });
       ui.harvestPicker = false; touch(st); rerenderSection(site, key);
       break;
     case 'harvest-del': sec.rows.splice(+t.dataset.idx, 1); touch(st); rerenderSection(site, key); break;
@@ -934,6 +938,7 @@ document.addEventListener('input', (e) => {
   const key = t.closest('[data-sec]').dataset.sec;
   if (t.dataset.bind === 'note') st.sections[key].note = t.value;
   else if (t.dataset.bind === 'cropNote') st.sections.crops.crops[+t.dataset.idx].note = t.value;
+  else if (t.dataset.bind === 'harvestQty') st.sections.harvest.rows[+t.dataset.idx].qty = Math.max(0, parseInt(t.value, 10) || 0);
   else return;
   touch(st);
   refreshDerived(site);
@@ -953,7 +958,9 @@ document.addEventListener('change', async (e) => {
   const site = currentSite();
   if (!site) return;
   const st = state.sites[site.id];
-  if (t.dataset.bind === 'cropStatus') {
+  if (t.dataset.bind === 'harvestQty') {
+    t.value = st.sections.harvest.rows[+t.dataset.idx].qty; // tidy blanks/negatives once editing ends
+  } else if (t.dataset.bind === 'cropStatus') {
     st.sections.crops.crops[+t.dataset.idx].status = t.value || null;
     touch(st);
     rerenderSection(site, 'crops');
@@ -968,6 +975,9 @@ document.addEventListener('change', async (e) => {
     rerenderSection(site, key);
   }
 });
+
+// Tapping a quantity selects it, so typing replaces the number
+document.addEventListener('focusin', (e) => { if (e.target.dataset.bind === 'harvestQty') e.target.select(); });
 
 // Live clock tick
 setInterval(() => {

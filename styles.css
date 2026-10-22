@@ -258,7 +258,12 @@ textarea:focus, select:focus { outline: none; border-color: var(--moss); backgro
   touch-action: manipulation; user-select: none; -webkit-user-select: none; border-radius: 12px;
 }
 .stepper button:active { background: var(--chartreuse); }
-.qty { min-width: 40px; text-align: center; font: 700 24px/1 var(--serif); }
+.qty {
+  width: 58px; height: 48px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+  text-align: center; font: 700 24px/1 var(--serif); color: var(--dirt); -moz-appearance: textfield;
+}
+.qty:focus { outline: none; background: #fff; box-shadow: inset 0 0 0 1.5px var(--moss); }
+.qty::-webkit-outer-spin-button, .qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .x { width: 40px; height: 40px; font-size: 22px; color: var(--muted); border-radius: 10px; }
 .add-row { margin-top: 10px; width: 100%; min-height: 46px; border: 1.5px dashed rgba(0, 77, 64, 0.35); border-radius: 12px; color: var(--moss); font-weight: 700; }
 .pick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
