@@ -1,7 +1,7 @@
 // FieldApp Test service worker — offline after first load.
 // Stale-while-revalidate: serve from cache instantly, refresh the cache in the background.
-// Bump CACHE when shipping changes you want picked up on the very next load.
-const CACHE = 'fieldapp-test-v3';
+// Bump CACHE on every deploy: the app sees the new worker take over and reloads itself onto it.
+const CACHE = 'fieldapp-test-v4';
 const SHELL = [
   './',
   './index.html',
@@ -14,7 +14,13 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser HTTP cache (GitHub Pages sends max-age=600),
+  // otherwise a new version can get filled with the previous deploy's files.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -38,7 +44,8 @@ self.addEventListener('fetch', (e) => {
       // Navigations all resolve to the app shell (hash routing).
       const key = req.mode === 'navigate' ? './index.html' : req;
       const cached = await cache.match(key);
-      const network = fetch(req)
+      // Same-origin background refreshes revalidate with GitHub (ETag) instead of trusting the HTTP cache.
+      const network = (sameOrigin ? fetch(req.url, { cache: 'no-cache' }) : fetch(req))
         .then((res) => {
           if (res && (res.ok || res.type === 'opaque')) cache.put(key, res.clone());
           return res;
