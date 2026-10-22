@@ -32,7 +32,7 @@ The District Center crops order is a section work order too, which is why there 
 - **Marking a section work order "done":** must meet its checklist. That covers its require-description and require-photo toggles plus the ≤ 3 rule (stricter wins). The pest check also needs a pest level, and District Center needs Kale and Collards updated.
 - **"Can't do":** needs a reason. A skipped work order still counts as resolved.
 - **Submitting a site:** needs its work order resolved and every ≤ 3 description filled in. Nothing else is required.
-- **Harvest Table:** a featured check with its own row. Completing it (on time or late) requires at least one photo, because that photo is the quality and client record.
+- **Harvest Table:** a featured check with its own row. Completing it (on time or late) needs a photo (the quality and client record) and one engagement word: Packed 5 · Busy 4 · Steady 3 · Slow 2 · Crickets 1. The numbers are manager-only and are sent in the submit payload.
 - **Autosave:** every change saves to localStorage. State resets automatically on a new calendar day, or use "Reset demo day" at the bottom of Home.
 
 ## Wiring a real backend later

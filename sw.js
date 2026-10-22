@@ -1,7 +1,7 @@
 // FieldApp Test service worker — offline after first load.
 // Stale-while-revalidate: serve from cache instantly, refresh the cache in the background.
 // Bump CACHE on every deploy: the app sees the new worker take over and reloads itself onto it.
-const CACHE = 'fieldapp-test-v4';
+const CACHE = 'fieldapp-test-v5';
 const SHELL = [
   './',
   './index.html',

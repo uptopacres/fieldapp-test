@@ -13,6 +13,8 @@
 const PEST_SCALE = [['None', 5], ['Low', 4], ['Moderate', 3], ['High', 2], ['Severe', 1]];
 const CROP_SCALE = [['Thriving', 5], ['Healthy', 4], ['Struggling', 3], ['Declining', 2], ['Failed', 1]];
 const CROP_DONE = 'Done';
+//   Harvest Table engagement: Packed 5 · Busy 4 · Steady 3 · Slow 2 · Crickets 1 (no ≤3 rule; a read on turnout)
+const ENGAGEMENT_SCALE = [['Packed', 5], ['Busy', 4], ['Steady', 3], ['Slow', 2], ['Crickets', 1]];
 const scoreOf = (scale, word) => { const s = scale.find((x) => x[0] === word); return s ? s[1] : null; };
 const isLow = (scale, word) => { const v = scoreOf(scale, word); return v !== null && v <= 3; };
 
@@ -44,7 +46,7 @@ const DAY = {
     },
   ],
   nonSite: { id: 'wo-shredder', title: 'Drop shredder at 1015 Half Street' },
-  // Featured check type. Photo is REQUIRED to complete: it's the quality + client-facing record.
+  // Featured check type. Completing needs a photo (quality + client record) and an engagement word.
   harvestTable: { id: 'ht-columbia', siteId: 'columbia', time: '12:30' },
 };
 
@@ -64,7 +66,7 @@ const QUICK_REASONS = ['Not needed today', 'No access', 'Ran out of time', 'Weat
  * Demo "submit": records land in a local outbox. To wire a real backend later,
  * set `endpoint` (or replace the body of submit) — callers don't change.
  */
-const STORE_KEY = 'fieldapp-test:state:v3';
+const STORE_KEY = 'fieldapp-test:state:v4';
 const OUTBOX_KEY = 'fieldapp-test:outbox:v1';
 
 const DataService = {
@@ -104,12 +106,12 @@ function freshSite(site) {
 
 function freshState() {
   return {
-    v: 3,
+    v: 4,
     date: todayKey(),
     clock: { inAt: null, outAt: null },
     sites: Object.fromEntries(DAY.sites.map((s) => [s.id, freshSite(s)])),
     nonSite: { resolution: null, reason: '' },
-    harvestTable: { status: null, photos: [] }, // status: 'ontime' | 'late'
+    harvestTable: { status: null, engagement: null, photos: [] }, // status: 'ontime' | 'late'
     celebrated: false,
   };
 }
@@ -117,7 +119,7 @@ function freshState() {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && s.v === 3 && s.date === todayKey()) return s;
+    if (s && s.v === 4 && s.date === todayKey()) return s;
   } catch { /* fall through */ }
   return freshState();
 }
@@ -199,9 +201,9 @@ function submitBlockers(site, st) {
 
 function noteRequirement(site, st, key) {
   const sec = st.sections[key];
-  if (key === 'pests' && isLow(PEST_SCALE, sec.rating)) return `Required · ${sec.rating} pests`;
+  if (key === 'pests' && isLow(PEST_SCALE, sec.rating)) return 'Required';
   const wo = woFor(site, key);
-  if (wo && wo.requireDescription && st.wo.resolution !== 'skip') return 'Required by work order';
+  if (wo && wo.requireDescription && st.wo.resolution !== 'skip') return 'Required';
   return null;
 }
 
@@ -285,7 +287,7 @@ function clockHTML() {
   const c = state.clock;
   if (!c.inAt) {
     return `<section class="clockband clock-ready"><button class="clock-in" data-action="clock-in">
-      <span class="clock-in-big">Clock in</span><span class="clock-in-sub">Start your day</span></button></section>`;
+      <span class="clock-in-big">Clock in</span></button></section>`;
   }
   if (!c.outAt) {
     return `<section class="clockband clock-on"><div class="clock-inner">
@@ -324,10 +326,10 @@ function siteRowHTML(site) {
 
 function nonSiteRowHTML() {
   const ns = state.nonSite;
-  const sub = ns.resolution === 'skip' ? `Skipped · ${esc(ns.reason)}` : 'Non-site work order';
+  const sub = ns.resolution === 'skip' ? `Skipped · ${esc(ns.reason)}` : '';
   return `<button class="row st-${ns.resolution ? 'done' : 'new'}" data-action="nonsite">
     <span class="row-main">
-      <span class="row-time">${sub}</span>
+      ${sub ? `<span class="row-time">${sub}</span>` : ''}
       <span class="row-title">${esc(DAY.nonSite.title)}</span>
     </span>
     <span class="row-side">
@@ -340,44 +342,40 @@ function nonSiteRowHTML() {
 function harvestRowHTML() {
   const ht = state.harvestTable;
   const site = siteById(DAY.harvestTable.siteId);
-  const st = ht.status ? 'done' : ht.photos.length ? 'progress' : 'new';
-  const sub = ht.status ? `${ht.status === 'ontime' ? 'On time' : 'Late'} · photo on file` : 'Photo required to complete';
-  return `<button class="row row-featured st-${st}" data-action="harvest-table">
+  return `<button class="row row-featured st-${ht.status ? 'done' : 'new'}" data-action="harvest-table">
     <span class="feat-icon">${ICON.harvest}</span>
     <span class="row-main">
       <span class="row-time">${esc(DAY.harvestTable.time)} · ${esc(site.name)}</span>
       <span class="row-title">Harvest Table</span>
-      <span class="feat-sub">${sub}</span>
+      ${ht.status ? `<span class="feat-sub">${ht.status === 'ontime' ? 'On time' : 'Late'} · ${esc(ht.engagement)}</span>` : ''}
     </span>
     <span class="row-side">
       <span class="row-count"><b>${ht.status ? 1 : 0}</b>/1</span>
-      <span class="row-state">${ht.status ? 'Done' : 'Featured'}</span>
+      <span class="row-state">${ht.status ? 'Done' : 'Not started'}</span>
     </span>
   </button>`;
 }
 
+// Completing needs a photo AND an engagement word; the Done buttons stay dimmed until both are in.
 function harvestTableSheet() {
   const ht = state.harvestTable;
-  const has = ht.photos.length > 0;
+  const ready = ht.photos.length > 0 && !!ht.engagement;
   const photos = `<div class="photos">
     ${ht.photos.map((p, i) => `<div class="thumb"><img src="${p}" alt="Harvest Table photo ${i + 1}">${ht.status ? '' : `<button class="thumb-x" data-action="ht-photo-del" data-idx="${i}" aria-label="Remove photo">×</button>`}</div>`).join('')}
     ${ht.status ? '' : `<label class="photo-add">${ICON.camera}<span>Add</span><input class="vh" type="file" accept="image/*" multiple data-photo="harvest-table"></label>`}
   </div>`;
-  const head = `<div class="sheet-kicker feat-kicker">Featured · ${esc(DAY.harvestTable.time)} · ${esc(siteById(DAY.harvestTable.siteId).name)}</div>
-    <h3 class="sheet-title">Harvest Table</h3>`;
-  if (ht.status) {
-    openSheet(`${head}<p class="sheet-p">✓ Done · ${ht.status === 'ontime' ? 'on time' : 'late'}</p>${photos}
-      <div class="sheet-actions"><button class="btn btn-ghost" data-action="ht-undo">Undo</button><button class="btn btn-primary" data-action="sheet-cancel">Close</button></div>`);
-    return;
-  }
-  openSheet(`${head}
-    <div class="field-label"><span>Table photo</span>${has ? '<span class="ok">✓ Photo added</span>' : '<span class="req">Required</span>'}</div>
-    <p class="sheet-p small">This photo is the quality and client record. No photo, not complete.</p>
+  const engagement = `<div class="seg">${ENGAGEMENT_SCALE.map(([w]) => `<button class="seg-btn${ht.engagement === w ? ' on' : ''}" data-action="ht-engage" data-val="${w}"${ht.status ? ' disabled' : ''}>${w}</button>`).join('')}</div>`;
+  const actions = ht.status
+    ? '<button class="btn btn-ghost" data-action="ht-undo">Undo</button><button class="btn btn-primary" data-action="sheet-cancel">Close</button>'
+    : `<button class="btn btn-ghost${ready ? '' : ' is-locked'}" data-action="ht-done" data-val="late">Done · late</button>
+       <button class="btn btn-primary${ready ? '' : ' is-locked'}" data-action="ht-done" data-val="ontime">Done · on time</button>`;
+  openSheet(`<div class="sheet-kicker feat-kicker">${esc(DAY.harvestTable.time)} · ${esc(siteById(DAY.harvestTable.siteId).name)}</div>
+    <h3 class="sheet-title">Harvest Table${ht.status ? ` <span class="sheet-done">✓ ${ht.status === 'ontime' ? 'On time' : 'Late'}</span>` : ''}</h3>
+    <div class="field-label"><span>Photo</span>${ht.status || ht.photos.length ? '' : '<span class="req">Required</span>'}</div>
     ${photos}
-    <div class="sheet-actions">
-      <button class="btn btn-ghost${has ? '' : ' is-locked'}" data-action="ht-done" data-val="late">Done · late</button>
-      <button class="btn btn-primary${has ? '' : ' is-locked'}" data-action="ht-done" data-val="ontime">Done · on time</button>
-    </div>`);
+    <div class="field-label sheet-gap"><span>Engagement</span></div>
+    ${engagement}
+    <div class="sheet-actions">${actions}</div>`);
 }
 
 function navHTML() {
@@ -463,18 +461,18 @@ function woCardHTML(site, st) {
 
 function noteReqHTML(site, st, key) {
   const r = noteRequirement(site, st, key);
-  return r ? `<span class="req">${esc(r)}</span>` : '<span class="opt">Optional</span>';
+  return r ? `<span class="req">${esc(r)}</span>` : '';
 }
 
 function photoPromptHTML(site, st, key) {
   const p = photoPrompt(site, st, key);
   const has = st.sections[key].photos.length > 0;
-  if (p === 'required') return has ? '<span class="ok">✓ Photo added</span>' : '<span class="req">Photo required</span>';
+  if (p === 'required') return has ? '' : '<span class="req">Photo required</span>';
   if (p === 'suggested' && !has) return '<span class="sugg">Photo suggested</span>';
   return '';
 }
 
-const cropReqHTML = (c) => (isLow(CROP_SCALE, c.status) ? `<span class="req">${esc(c.status)} — describe what's wrong · photo suggested</span>` : '');
+const cropReqHTML = (c) => (isLow(CROP_SCALE, c.status) ? '<span class="req">Description required</span> <span class="sugg">Photo suggested</span>' : '');
 
 function pestsHTML(sec) {
   return `<div class="field" data-field="pests-rating">
@@ -485,8 +483,8 @@ function pestsHTML(sec) {
 
 function cropsHTML(sec, wo) {
   const targets = (wo && wo.cropsToUpdate) || [];
-  const opts = (cur) => `<option value="">Update status…</option>${CROP_SCALE.map(([w]) => `<option value="${w}"${cur === w ? ' selected' : ''}>${w}</option>`).join('')}<option value="${CROP_DONE}"${cur === CROP_DONE ? ' selected' : ''}>Done (retired)</option>`;
-  return `<div class="field"><div class="field-label"><span>Crop list</span><span class="opt">${sec.crops.length} crops</span></div>
+  const opts = (cur) => `<option value="">Status</option>${CROP_SCALE.map(([w]) => `<option value="${w}"${cur === w ? ' selected' : ''}>${w}</option>`).join('')}<option value="${CROP_DONE}"${cur === CROP_DONE ? ' selected' : ''}>Done</option>`;
+  return `<div class="field">
     <div class="crops">${sec.crops.map((c, i) => `
       <div class="crop${targets.includes(c.name) && !c.status ? ' crop-target' : ''}" data-field="cropstatus-${i}">
         <div class="crop-top">
@@ -494,7 +492,7 @@ function cropsHTML(sec, wo) {
           <select class="pick${c.status ? ' set' : ''}" data-bind="cropStatus" data-idx="${i}" aria-label="${esc(c.name)} status">${opts(c.status)}</select>
         </div>
         <div class="crop-note" data-field="cropnote-${i}">
-          <div class="note-wrap"><textarea id="cropnote-${i}" rows="1" data-bind="cropNote" data-idx="${i}" placeholder="Note on ${esc(c.name)}">${esc(c.note)}</textarea>${micBtn(`cropnote-${i}`)}</div>
+          <div class="note-wrap"><textarea id="cropnote-${i}" rows="1" data-bind="cropNote" data-idx="${i}" placeholder="Note">${esc(c.note)}</textarea>${micBtn(`cropnote-${i}`)}</div>
           <div class="hint" data-derived="crop-req" data-idx="${i}">${cropReqHTML(c)}</div>
         </div>
       </div>`).join('')}
@@ -520,7 +518,7 @@ function harvestHTML(sec) {
       ? `<div class="pick-chips">${avail.map((c) => `<button class="chip-btn" data-action="harvest-add" data-val="${esc(c.name)}">+ ${esc(c.name)}</button>`).join('')}</div>`
       : '<button class="add-row" data-action="harvest-open">+ Add a crop</button>';
   }
-  return `<div class="field"><div class="field-label"><span>Harvested</span><span class="opt">qty</span></div>${rows}${add}</div>`;
+  return `<div class="field"><div class="field-label"><span>Harvested</span></div>${rows}${add}</div>`;
 }
 
 function photosHTML(st, key) {
@@ -544,10 +542,9 @@ function sectionBodyHTML(site, st, key) {
   if (key === 'pests') h += pestsHTML(sec);
   if (key === 'crops') h += cropsHTML(sec, wo);
   if (key === 'harvest') h += harvestHTML(sec);
-  const placeholder = { incident: 'Who, what happened?', infrastructure: 'Beds, fences, tools, structures…', external: 'Exterior, frontage, signage, street side…', irrigation: 'Timers, leaks, watering…' }[key] || 'What did you see or do?';
   h += `<div class="field" data-field="note-${key}">
     <div class="field-label"><label for="note-${key}">${key === 'incident' ? 'What happened' : 'Description'}</label><span data-derived="note-req"></span></div>
-    <div class="note-wrap"><textarea id="note-${key}" rows="2" data-bind="note" placeholder="${placeholder}">${esc(sec.note)}</textarea>${micBtn(`note-${key}`)}</div>
+    <div class="note-wrap"><textarea id="note-${key}" rows="2" data-bind="note">${esc(sec.note)}</textarea>${micBtn(`note-${key}`)}</div>
   </div>`;
   h += photosHTML(st, key);
   return h;
@@ -576,7 +573,6 @@ function renderForm(siteId) {
       <div class="form-head-txt"><div class="form-title">${esc(site.name)}</div><div class="form-sub" id="form-sub"></div></div>
     </header>
     <main class="form">
-      <p class="form-hint">Tap a section if it happened. Blank means nothing to report.</p>
       ${SECTIONS.map((s) => sectionHTML(site, st, s)).join('')}
     </main>
     <div class="actionbar">
@@ -720,15 +716,15 @@ function closeSheet() { $('#sheet-root').innerHTML = ''; }
 
 function reasonHTML(confirmAction, title, kicker) {
   return `<div class="sheet-kicker">${esc(kicker)}</div><h3 class="sheet-title">${esc(title)}</h3>
-    <label class="field-label" for="reason"><span>Why can't it be done?</span><span class="req">Required</span></label>
-    <div class="note-wrap"><textarea id="reason" rows="3" placeholder="Short reason"></textarea>${micBtn('reason')}</div>
+    <label class="field-label" for="reason"><span>Reason</span></label>
+    <div class="note-wrap"><textarea id="reason" rows="3"></textarea>${micBtn('reason')}</div>
     <div class="pick-chips">${QUICK_REASONS.map((r) => `<button class="chip-btn" data-action="quick-reason" data-val="${esc(r)}">${esc(r)}</button>`).join('')}</div>
     <div class="sheet-actions"><button class="btn btn-ghost" data-action="sheet-cancel">Cancel</button><button class="btn btn-primary" data-action="${confirmAction}">Save reason</button></div>`;
 }
 
 function nonSiteSheet() {
   const ns = state.nonSite;
-  const head = `<div class="sheet-kicker">Work order · non-site</div><h3 class="sheet-title">${esc(DAY.nonSite.title)}</h3>`;
+  const head = `<div class="sheet-kicker">Work order</div><h3 class="sheet-title">${esc(DAY.nonSite.title)}</h3>`;
   if (ns.resolution) {
     openSheet(`${head}<p class="sheet-p">${ns.resolution === 'done' ? '✓ Marked done.' : `Skipped · ${esc(ns.reason)}`}</p>
       <div class="sheet-actions"><button class="btn btn-ghost" data-action="ns-undo">Undo</button><button class="btn btn-primary" data-action="sheet-cancel">Close</button></div>`);
@@ -814,11 +810,11 @@ document.addEventListener('click', (e) => {
     case 'clock-in':
       state.clock.inAt = Date.now(); save();
       DataService.submit('clock_in', { at: state.clock.inAt });
-      renderHome(); toast('Clocked in — have a good day');
+      renderHome(); toast('Clocked in');
       break;
     case 'clock-out':
       openSheet(`<div class="sheet-kicker">Time clock</div><h3 class="sheet-title">Clock out for the day?</h3>
-        <p class="sheet-p">You've been on the clock ${fmtDur(Date.now() - state.clock.inAt)}. One punch per day — you won't be able to clock back in.</p>
+        <p class="sheet-p">${fmtDur(Date.now() - state.clock.inAt)} today. You can't clock back in.</p>
         <div class="sheet-actions"><button class="btn btn-ghost" data-action="sheet-cancel">Not yet</button><button class="btn btn-primary" data-action="clock-out-confirm">Clock out</button></div>`);
       break;
     case 'clock-out-confirm':
@@ -832,12 +828,19 @@ document.addEventListener('click', (e) => {
 
     // --- Harvest Table (featured; photo required) ---
     case 'harvest-table': harvestTableSheet(); break;
-    case 'ht-done':
-      if (!state.harvestTable.photos.length) { toast('Add a photo of the table to complete it'); return; }
-      state.harvestTable.status = t.dataset.val; save();
-      DataService.submit('harvest_table', { id: DAY.harvestTable.id, siteId: DAY.harvestTable.siteId, status: t.dataset.val, photoCount: state.harvestTable.photos.length });
+    case 'ht-engage': state.harvestTable.engagement = t.dataset.val; save(); harvestTableSheet(); break;
+    case 'ht-done': {
+      const ht = state.harvestTable;
+      if (!ht.photos.length) { toast('Add a photo of the table'); return; }
+      if (!ht.engagement) { toast('Pick the engagement'); return; }
+      ht.status = t.dataset.val; save();
+      DataService.submit('harvest_table', {
+        id: DAY.harvestTable.id, siteId: DAY.harvestTable.siteId, status: ht.status,
+        engagement: { word: ht.engagement, score: scoreOf(ENGAGEMENT_SCALE, ht.engagement) }, photoCount: ht.photos.length,
+      });
       closeSheet(); renderHome(); toast('Harvest Table done');
       break;
+    }
     case 'ht-undo': state.harvestTable.status = null; save(); renderHome(); harvestTableSheet(); break;
     case 'ht-photo-del': state.harvestTable.photos.splice(+t.dataset.idx, 1); save(); renderHome(); harvestTableSheet(); break;
     case 'ns-done':
@@ -859,7 +862,7 @@ document.addEventListener('click', (e) => {
 
     case 'reset':
       openSheet(`<div class="sheet-kicker">Demo</div><h3 class="sheet-title">Reset the demo day?</h3>
-        <p class="sheet-p">Clears the clock, every form, photos and work orders.</p>
+        <p class="sheet-p">Clears everything for today.</p>
         <div class="sheet-actions"><button class="btn btn-ghost" data-action="sheet-cancel">Cancel</button><button class="btn btn-danger" data-action="reset-confirm">Reset</button></div>`);
       break;
     case 'reset-confirm':

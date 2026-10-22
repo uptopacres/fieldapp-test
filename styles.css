@@ -81,7 +81,6 @@ body::before { content: ''; position: fixed; inset: 0 0 auto; height: var(--sat)
 }
 .clock-in:active { background: rgba(255, 255, 255, 0.08); }
 .clock-in-big { font: 700 40px/1 var(--serif); }
-.clock-in-sub { font: 500 13px var(--label); opacity: 0.8; letter-spacing: 0.04em; }
 .clock-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px 14px 20px; }
 .clock-txt { min-width: 0; }
 .clock-live { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -126,6 +125,10 @@ body::before { content: ''; position: fixed; inset: 0 0 auto; height: var(--sat)
 .feat-kicker { color: var(--tomato); }
 .sheet-p.small { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
 .btn.is-locked { opacity: 0.45; }
+.sheet-gap { margin-top: 18px; }
+.sheet-done { font: 600 15px var(--sans); color: var(--clover); vertical-align: middle; margin-left: 6px; }
+.seg-btn:disabled { color: inherit; opacity: 0.6; }
+.seg-btn.on:disabled { opacity: 1; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 .chip { font: 600 12px/1.25 var(--label); padding: 4px 9px; border-radius: 999px; background: var(--chartreuse); color: var(--dirt); }
@@ -157,8 +160,7 @@ body::before { content: ''; position: fixed; inset: 0 0 auto; height: var(--sat)
 .form-head-txt { min-width: 0; }
 .form-title { font: 700 26px/1.1 var(--serif); }
 .form-sub { font: 500 12px var(--label); opacity: 0.8; letter-spacing: 0.04em; margin-top: 2px; }
-.form { padding: 4px 12px calc(100px + var(--sab)); }
-.form-hint { font: 500 13px var(--label); color: var(--muted); margin: 12px 6px; }
+.form { padding: 12px 12px calc(100px + var(--sab)); }
 
 .sec { background: var(--card); border-radius: var(--r); margin-bottom: 10px; border: 1px solid var(--line); overflow: hidden; }
 .sec-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 14px 14px 14px 16px; min-height: 58px; text-align: left; }
