@@ -114,6 +114,19 @@ body::before { content: ''; position: fixed; inset: 0 0 auto; height: var(--sat)
 .st-progress .row-state { color: #2B6E76; }
 .st-done .row-state, .st-done .row-count { color: var(--clover); }
 
+/* Featured check (Harvest Table): Tomato stripe + icon, never a full fill */
+.row.row-featured { border: 1.5px solid var(--tomato); padding-left: 16px; box-shadow: 0 4px 14px rgba(253, 103, 66, 0.16); }
+.row.row-featured::before { background: var(--tomato); width: 7px; }
+.row.row-featured.st-done { background: var(--clover-wash); }
+.feat-icon { flex: none; width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; color: var(--tomato); background: rgba(253, 103, 66, 0.12); margin-left: 4px; }
+.feat-sub { font: 600 13px var(--label); color: var(--tomato); }
+.st-done .feat-sub { color: var(--clover); }
+.row-featured .row-state { color: var(--tomato); }
+.row-featured.st-done .row-state { color: var(--clover); }
+.feat-kicker { color: var(--tomato); }
+.sheet-p.small { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.btn.is-locked { opacity: 0.45; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
 .chip { font: 600 12px/1.25 var(--label); padding: 4px 9px; border-radius: 999px; background: var(--chartreuse); color: var(--dirt); }
 .chip-wo { background: var(--peachy); }

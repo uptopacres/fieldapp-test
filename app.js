@@ -44,6 +44,8 @@ const DAY = {
     },
   ],
   nonSite: { id: 'wo-shredder', title: 'Drop shredder at 1015 Half Street' },
+  // Featured check type. Photo is REQUIRED to complete: it's the quality + client-facing record.
+  harvestTable: { id: 'ht-columbia', siteId: 'columbia', time: '12:30' },
 };
 
 const SECTIONS = [
@@ -62,7 +64,7 @@ const QUICK_REASONS = ['Not needed today', 'No access', 'Ran out of time', 'Weat
  * Demo "submit": records land in a local outbox. To wire a real backend later,
  * set `endpoint` (or replace the body of submit) — callers don't change.
  */
-const STORE_KEY = 'fieldapp-test:state:v2';
+const STORE_KEY = 'fieldapp-test:state:v3';
 const OUTBOX_KEY = 'fieldapp-test:outbox:v1';
 
 const DataService = {
@@ -102,11 +104,12 @@ function freshSite(site) {
 
 function freshState() {
   return {
-    v: 2,
+    v: 3,
     date: todayKey(),
     clock: { inAt: null, outAt: null },
     sites: Object.fromEntries(DAY.sites.map((s) => [s.id, freshSite(s)])),
     nonSite: { resolution: null, reason: '' },
+    harvestTable: { status: null, photos: [] }, // status: 'ontime' | 'late'
     celebrated: false,
   };
 }
@@ -114,7 +117,7 @@ function freshState() {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(STORE_KEY));
-    if (s && s.v === 2 && s.date === todayKey()) return s;
+    if (s && s.v === 3 && s.date === todayKey()) return s;
   } catch { /* fall through */ }
   return freshState();
 }
@@ -250,9 +253,10 @@ function siteChecks(site) {
 function dayChecks() {
   let done = 0, total = 0;
   for (const s of DAY.sites) { const c = siteChecks(s); done += c.done; total += c.total; }
-  total += 1;
+  total += 2;
   if (state.nonSite.resolution) done += 1;
-  return { done, total }; // 3 sites + 3 section WOs + 1 non-site = 7
+  if (state.harvestTable.status) done += 1;
+  return { done, total }; // 3 sites + 3 section WOs + 1 non-site + 1 Harvest Table = 8
 }
 function siteState(site) {
   const st = state.sites[site.id];
@@ -333,6 +337,49 @@ function nonSiteRowHTML() {
   </button>`;
 }
 
+function harvestRowHTML() {
+  const ht = state.harvestTable;
+  const site = siteById(DAY.harvestTable.siteId);
+  const st = ht.status ? 'done' : ht.photos.length ? 'progress' : 'new';
+  const sub = ht.status ? `${ht.status === 'ontime' ? 'On time' : 'Late'} · photo on file` : 'Photo required to complete';
+  return `<button class="row row-featured st-${st}" data-action="harvest-table">
+    <span class="feat-icon">${ICON.harvest}</span>
+    <span class="row-main">
+      <span class="row-time">${esc(DAY.harvestTable.time)} · ${esc(site.name)}</span>
+      <span class="row-title">Harvest Table</span>
+      <span class="feat-sub">${sub}</span>
+    </span>
+    <span class="row-side">
+      <span class="row-count"><b>${ht.status ? 1 : 0}</b>/1</span>
+      <span class="row-state">${ht.status ? 'Done' : 'Featured'}</span>
+    </span>
+  </button>`;
+}
+
+function harvestTableSheet() {
+  const ht = state.harvestTable;
+  const has = ht.photos.length > 0;
+  const photos = `<div class="photos">
+    ${ht.photos.map((p, i) => `<div class="thumb"><img src="${p}" alt="Harvest Table photo ${i + 1}">${ht.status ? '' : `<button class="thumb-x" data-action="ht-photo-del" data-idx="${i}" aria-label="Remove photo">×</button>`}</div>`).join('')}
+    ${ht.status ? '' : `<label class="photo-add">${ICON.camera}<span>Add</span><input class="vh" type="file" accept="image/*" multiple data-photo="harvest-table"></label>`}
+  </div>`;
+  const head = `<div class="sheet-kicker feat-kicker">Featured · ${esc(DAY.harvestTable.time)} · ${esc(siteById(DAY.harvestTable.siteId).name)}</div>
+    <h3 class="sheet-title">Harvest Table</h3>`;
+  if (ht.status) {
+    openSheet(`${head}<p class="sheet-p">✓ Done · ${ht.status === 'ontime' ? 'on time' : 'late'}</p>${photos}
+      <div class="sheet-actions"><button class="btn btn-ghost" data-action="ht-undo">Undo</button><button class="btn btn-primary" data-action="sheet-cancel">Close</button></div>`);
+    return;
+  }
+  openSheet(`${head}
+    <div class="field-label"><span>Table photo</span>${has ? '<span class="ok">✓ Photo added</span>' : '<span class="req">Required</span>'}</div>
+    <p class="sheet-p small">This photo is the quality and client record. No photo, not complete.</p>
+    ${photos}
+    <div class="sheet-actions">
+      <button class="btn btn-ghost${has ? '' : ' is-locked'}" data-action="ht-done" data-val="late">Done · late</button>
+      <button class="btn btn-primary${has ? '' : ' is-locked'}" data-action="ht-done" data-val="ontime">Done · on time</button>
+    </div>`);
+}
+
 function navHTML() {
   const item = (icon, label, active) => `<span class="nav-item${active ? ' active' : ''}">${icon}<span>${label}</span></span>`;
   return `<nav class="bottom-nav" aria-label="Main (demo only)">
@@ -347,7 +394,7 @@ function renderHome() {
     ${bandHTML()}
     <main class="home">
       <h2 class="list-h">Sites today</h2>
-      <div class="list">${DAY.sites.map(siteRowHTML).join('')}</div>
+      <div class="list">${DAY.sites.map((s) => siteRowHTML(s) + (s.id === DAY.harvestTable.siteId ? harvestRowHTML() : '')).join('')}</div>
       <h2 class="list-h">Other work</h2>
       <div class="list">${nonSiteRowHTML()}</div>
       <button class="reset-link" data-action="reset">Reset demo day</button>
@@ -664,6 +711,8 @@ function toggleMic(btn) {
 
 /* ===================== SHEETS / TOAST / CONFETTI ===================== */
 function openSheet(html) {
+  const open = $('.sheet-backdrop.show .sheet');
+  if (open) { open.innerHTML = html; return; } // already up: swap content, no slide-in replay
   $('#sheet-root').innerHTML = `<div class="sheet-backdrop" data-action="sheet-close"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
   requestAnimationFrame(() => { const b = $('.sheet-backdrop'); if (b) b.classList.add('show'); });
 }
@@ -780,6 +829,17 @@ document.addEventListener('click', (e) => {
 
     // --- non-site work order ---
     case 'nonsite': nonSiteSheet(); break;
+
+    // --- Harvest Table (featured; photo required) ---
+    case 'harvest-table': harvestTableSheet(); break;
+    case 'ht-done':
+      if (!state.harvestTable.photos.length) { toast('Add a photo of the table to complete it'); return; }
+      state.harvestTable.status = t.dataset.val; save();
+      DataService.submit('harvest_table', { id: DAY.harvestTable.id, siteId: DAY.harvestTable.siteId, status: t.dataset.val, photoCount: state.harvestTable.photos.length });
+      closeSheet(); renderHome(); toast('Harvest Table done');
+      break;
+    case 'ht-undo': state.harvestTable.status = null; save(); renderHome(); harvestTableSheet(); break;
+    case 'ht-photo-del': state.harvestTable.photos.splice(+t.dataset.idx, 1); save(); renderHome(); harvestTableSheet(); break;
     case 'ns-done':
       state.nonSite = { resolution: 'done', reason: '' }; save();
       DataService.submit('work_order', { id: DAY.nonSite.id, resolution: 'done' });
@@ -878,6 +938,15 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('change', async (e) => {
   const t = e.target;
+  if (t.dataset.photo === 'harvest-table') {
+    const files = [...t.files];
+    t.value = '';
+    for (const f of files) {
+      try { state.harvestTable.photos.push(await downscale(f)); } catch { toast('Couldn’t read that photo'); }
+    }
+    save(); renderHome(); harvestTableSheet();
+    return;
+  }
   const site = currentSite();
   if (!site) return;
   const st = state.sites[site.id];

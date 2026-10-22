@@ -22,15 +22,17 @@ A throwaway demo of one farmer's single day. It shows the flow so people can app
 | 3 site forms (one per submit) | 3 |
 | 3 section work orders: Weekly pest check, Irrigation timer, Crops kale + collard status | 3 |
 | 1 non-site work order: shredder drop | 1 |
-| **Total** | **7** |
+| 1 Harvest Table: Columbia Square, 12:30 (featured; photo required) | 1 |
+| **Total** | **8** |
 
-The brief estimated 6, but the District Center crops order is also a section work order.
+The District Center crops order is a section work order too, which is why there are 3 of them, not 2.
 
 ## Rules implemented
 - **Rating ≤ 3:** for Pests (Moderate/High/Severe) or a crop status of Struggling/Declining/Failed, a description is required and a "Photo suggested" prompt appears. "Done (retired)" is a terminal crop status with no score.
 - **Marking a section work order "done":** must meet its checklist. That covers its require-description and require-photo toggles plus the ≤ 3 rule (stricter wins). The pest check also needs a pest level, and District Center needs Kale and Collards updated.
 - **"Can't do":** needs a reason. A skipped work order still counts as resolved.
 - **Submitting a site:** needs its work order resolved and every ≤ 3 description filled in. Nothing else is required.
+- **Harvest Table:** a featured check with its own row. Completing it (on time or late) requires at least one photo, because that photo is the quality and client record.
 - **Autosave:** every change saves to localStorage. State resets automatically on a new calendar day, or use "Reset demo day" at the bottom of Home.
 
 ## Wiring a real backend later
